@@ -2,6 +2,7 @@ import os
 import cv2
 import cvzone
 from cvzone.PoseModule import PoseDetector
+import numpy as np
 
 # Load video and pose detector
 cap = cv2.VideoCapture(0)
@@ -19,16 +20,24 @@ cam_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 shirtFolderPath = "Resources/Shirts"
 listShirts = os.listdir(shirtFolderPath)
 
-# Fixed aspect ratio of the T-shirt image
-fixedRatio = 262 / 190  # widthOfShirt / widthOfPoint11to12
-shirtRatioHeightWidth = 581 / 440
-
 # Index to track the current T-shirt image being displayed
 imageNumber = 0
 
-# Load button images
-imgButtonRight = cv2.imread("Resources/button.png", cv2.IMREAD_UNCHANGED)
+# Load button images without alpha channel
+imgButtonRight = cv2.imread("Resources/button.png", cv2.IMREAD_COLOR)
+imgButtonRight = cv2.resize(imgButtonRight, (0, 0), fx=0.5, fy=0.5)  # Resize button
 imgButtonLeft = cv2.flip(imgButtonRight, 1)
+
+# Calculate positions of buttons
+button_size = imgButtonRight.shape[:2]
+button_margin = 20
+button_top_offset = int(cam_height * 0.1)
+button_right_pos = (cam_width - button_margin - button_size[1], button_top_offset)
+button_left_pos = (button_margin, button_top_offset)
+
+print("Button size:", button_size)
+print("Button right position:", button_right_pos)
+print("Button left position:", button_left_pos)
 
 # Variables to control button interaction
 counterRight = 0
@@ -46,46 +55,55 @@ while True:
 
     if lmList:
         # Extract key points for the left and right shoulders
-        lm11 = lmList[11][1:3]  # Left shoulder
-        lm12 = lmList[12][1:3]  # Right shoulder
+        shoulder_left = lmList[11][1:3]  # Left shoulder
+        shoulder_right = lmList[12][1:3]  # Right shoulder
 
-        # Load and resize the current T-shirt image
-        imgShirtPath = os.path.join(shirtFolderPath, listShirts[imageNumber])
-        if os.path.exists(imgShirtPath):
-            imgShirt = cv2.imread(imgShirtPath, cv2.IMREAD_UNCHANGED)
-            widthOfShirt = int((lm11[0] - lm12[0]) * fixedRatio)
+        if all(shoulder_left) and all(shoulder_right):
+            # Calculate the distance between the shoulder keypoints
+            shoulder_distance = np.linalg.norm(np.array(shoulder_left) - np.array(shoulder_right))
 
-            # Resize the shirt image based on the calculated width
-            if widthOfShirt > 0:
-                imgShirtHeight = int(widthOfShirt * shirtRatioHeightWidth)
-                imgShirt = cv2.resize(imgShirt, (widthOfShirt, imgShirtHeight))
+            # Load and resize the current T-shirt image
+            imgShirtPath = os.path.join(shirtFolderPath, listShirts[imageNumber])
+            if os.path.exists(imgShirtPath):
+                imgShirt = cv2.imread(imgShirtPath, cv2.IMREAD_UNCHANGED)
 
-                # Calculate offset to properly position the T-shirt on the body
-                currentScale = (lm11[0] - lm12[0]) / 190
-                offset = int(44 * currentScale), int(48 * currentScale)
+                # Calculate the scale factor based on shoulder distance
+                scale_factor = shoulder_distance / 100.0  # Adjust this value as needed
+
+                # Resize the shirt image based on the scale factor
+                imgShirt = cv2.resize(imgShirt, None, fx=scale_factor, fy=scale_factor)
+
+                # Calculate the position to overlay the T-shirt
+                overlay_pos_x = int(shoulder_right[0] - imgShirt.shape[1] / 2)
+                overlay_pos_y = int(shoulder_right[1] - imgShirt.shape[0] / 2)
 
                 try:
-                    img = cvzone.overlayPNG(img, imgShirt, (lm12[0] - offset[0], lm12[1] - offset[1]))
+                    # Ensure overlay position does not go beyond frame boundaries
+                    overlay_pos_x = max(0, overlay_pos_x)
+                    overlay_pos_y = max(0, overlay_pos_y)
+                    img = cvzone.overlayPNG(img, imgShirt, (overlay_pos_x, overlay_pos_y))
                 except Exception as e:
                     print(f"Error overlaying shirt: {e}")
 
         # Display button overlays
-        img = cvzone.overlayPNG(img, imgButtonRight, (int(cam_width * 0.9), int(cam_height * 0.1)))
-        img = cvzone.overlayPNG(img, imgButtonLeft, (int(cam_width * 0.1), int(cam_height * 0.1)))
+        img[button_right_pos[1]:button_right_pos[1] + button_size[0],
+            button_right_pos[0]:button_right_pos[0] + button_size[1]] = imgButtonRight
+        img[button_left_pos[1]:button_left_pos[1] + button_size[0],
+            button_left_pos[0]:button_left_pos[0] + button_size[1]] = imgButtonLeft
 
         # Button interaction logic
         if lmList[16][1] < 300:
             counterRight += 1
-            cv2.ellipse(img, (139, 360), (66, 66), 0, 0,
-                        counterRight * selectionSpeed, (0, 255, 0), 20)
+            cv2.ellipse(img, (button_right_pos[0] + button_size[1] // 2, button_right_pos[1] + button_size[0] // 2), (30, 30), 0, 0,
+                        counterRight * selectionSpeed, (0, 255, 0), 10)
             if counterRight * selectionSpeed > 360:
                 counterRight = 0
                 if imageNumber < len(listShirts) - 1:
                     imageNumber += 1
         elif lmList[15][1] > 900:
             counterLeft += 1
-            cv2.ellipse(img, (1138, 360), (66, 66), 0, 0,
-                        counterLeft * selectionSpeed, (0, 255, 0), 20)
+            cv2.ellipse(img, (button_left_pos[0] + button_size[1] // 2, button_left_pos[1] + button_size[0] // 2), (30, 30), 0, 0,
+                        counterLeft * selectionSpeed, (0, 255, 0), 10)
             if counterLeft * selectionSpeed > 360:
                 counterLeft = 0
                 if imageNumber > 0:
