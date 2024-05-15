@@ -3,9 +3,9 @@ import Webcam from 'react-webcam';
 import { Button } from 'react-bootstrap';
 import './App.css';
 
-import previousIcon from './previous-icon.png'; // Import your previous icon image
-import captureIcon from './capture-icon.png'; // Import your capture icon image
-import nextIcon from './next-icon.png'; // Import your next icon image
+import previousIcon from './previous-icon.png';
+import captureIcon from './capture-icon.png'; 
+import nextIcon from './next-icon.png'; 
 
 function App() {
   const webcamRef = useRef(null);
@@ -13,7 +13,6 @@ function App() {
 
   const sendDataToBackend = () => {
     const imageSrc = webcamRef.current.getScreenshot();
-    // Send imageSrc and imageNumber to the backend (you can use fetch or axios)
     console.log("Sending data to backend...");
     console.log("Image number:", imageNumber);
     console.log("Image src:", imageSrc);

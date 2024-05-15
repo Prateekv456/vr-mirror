@@ -4,7 +4,7 @@ import os
 app = Flask(__name__)
 
 # Endpoint to receive image data and process it
-@app.route('/api/customize_tshirt', methods=['POST'])
+@app.route('/api/endpoint', methods=['POST'])
 def customize_tshirt():
     # Receive image data from the request
     image_data = request.json.get('imageData')
